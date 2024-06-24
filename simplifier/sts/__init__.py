@@ -3,6 +3,7 @@ from ..base import Boto3Base
 
 
 class STS(Boto3Base):
+    _service = 'sts'
 
     @property
     def identity(self):
