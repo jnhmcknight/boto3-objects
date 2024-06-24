@@ -24,8 +24,19 @@ class User(IAMBase):
         self._data = self.client.create_user(**kwargs).get('User')
 
         if wait:
-            waiter = self.client.get_waiter('user_exists')
-            waiter.wait()
+            self.wait(
+                'user_exists',
+                UserName=self.username,
+            )
+
+    @classmethod
+    def find_by_name(cls, username, **kwargs):
+        self = cls(username, **kwargs)
+        try:
+            self.load()
+            return self
+        except self.client.exceptions.NoSuchEntityException:
+            return None
 
     def attach_policy(self, policy):
         self.client.attach_user_policy(
@@ -82,7 +93,7 @@ class AccessKey(IAMBase):
 
     @property
     def secret_access_key(self):
-        if self._access_key_id is None:
+        if self._secret_access_key is None:
             self._secret_access_key = self._data['SecretAccessKey']
 
         return self._secret_access_key
@@ -100,8 +111,10 @@ class AccessKey(IAMBase):
                 self._write_locally(filehandle)
 
     def _write_locally(self, filehandle):
-        file.write(f'export AWS_ACCESS_KEY_ID="{self.access_key_id}"')
-        file.write(f'export AWS_SECRET_ACCESS_KEY="{self.secret_access_key}')
+        filehandle.writelines([
+            f'export AWS_ACCESS_KEY_ID="{self.access_key_id}"\n',
+            f'export AWS_SECRET_ACCESS_KEY="{self.secret_access_key}"\n',
+        ])
 
 
 class Policy(IAMBase):
@@ -121,8 +134,10 @@ class Policy(IAMBase):
         self._data = self.client.create_policy(**kwargs).get('Policy')
 
         if wait:
-            waiter = self.client.get_waiter('policy_exists')
-            waiter.wait()
+            self.wait(
+                'policy_exists',
+                PolicyArn=self.arn,
+            )
 
     @property
     def policy_string(self):
@@ -166,8 +181,10 @@ class Role(IAMBase):
         self._data = self.client.create_role(**kwargs).get('Role')
 
         if wait:
-            waiter = self.client.get_waiter('role_exists')
-            waiter.wait(RoleName=self.role_name)
+            self.wait(
+                'role_exists',
+                RoleName=self.role_name,
+            )
 
     def attach_policy(self, policy):
         self.client.put_role_policy(
@@ -191,5 +208,7 @@ class InstanceProfile(IAMBase):
         self._data = self.client.create_instance_profile(**kwargs).get('InstanceProfile')
 
         if wait:
-            waiter = self.client.get_waiter('instance_profile_exists')
-            waiter.wait()
+            self.wait(
+                'instance_profile_exists',
+                InstanceProfileName=self.profile_name,
+            )
