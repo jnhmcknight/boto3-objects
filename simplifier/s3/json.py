@@ -1,10 +1,10 @@
 
 import json
 
-from .base import S3Object
+from .core import Object
 
 
-class JsonS3Object(S3Object):
+class JsonObject(Object):
 
     @classmethod
     def create(cls, bucket, key, contents, **kwargs):

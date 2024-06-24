@@ -32,8 +32,8 @@ class Bucket(S3Base):
         )
 
         if wait:
-            waiter = bucket.client.get_waiter('object_exists')
-            waiter.wait(
+            self.wait(
+                'object_exists',
                 Bucket=self.bucket,
             )
 
@@ -96,8 +96,8 @@ class Object(S3Base):
             raise exc
 
         if wait:
-            waiter = bucket.client.get_waiter('object_exists')
-            waiter.wait(
+            bucket.wait(
+                'object_exists',
                 Bucket=bucket,
                 Key=key,
             )

@@ -1,3 +1,3 @@
 
-from .core import S3Bucket, S3Object
-from .json import JsonS3Object
+from .core import Bucket, Object
+from .json import JsonObject
