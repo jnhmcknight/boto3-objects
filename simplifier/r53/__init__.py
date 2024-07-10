@@ -1,5 +1,9 @@
 
-from dataclasses import dataclass
+from dataclasses import (
+    asdict,
+    dataclass,
+    is_dataclass,
+)
 import typing
 
 from ..base import Boto3Base
@@ -44,9 +48,11 @@ class Zone(Boto3Base):
         self._zone_id = value
 
     def update(self, change_set, *, wait=False):
+        changes = asdict(change_set) if is_dataclass(change_set) else change_set
+
         resp = self.client.change_resource_record_sets(
             HostedZoneId=self.zone_id,
-            ChangeBatch=change_set,
+            ChangeBatch=changes,
         )
 
         if wait:
