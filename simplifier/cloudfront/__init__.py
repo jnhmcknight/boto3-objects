@@ -121,7 +121,7 @@ class Function(Boto3Base):
             },
         }
 
-        resp = self.client.create_function(**kwargs).get('FunctionSummary')
+        resp = self.client.create_function(**kwargs)
         self._data = resp.get('FunctionSummary')
         self.etag = resp.get('ETag')
 
