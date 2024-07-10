@@ -71,10 +71,10 @@ class Boto3Base:
     def resource(self, value):
         self._resource = value
 
-    def include_tags(self, **kwargs):
+    def include_tags(self, *, tag_key='Tags', **kwargs):
         if 'tags' not in kwargs:
             if self.tags:
-                kwargs.update({'Tags': self.tags})
+                kwargs.update({tag_key: self.tags})
 
         return kwargs
 
