@@ -66,7 +66,7 @@ class Certificate(Boto3Base):
             if limit_to_domains and item['DomainName'].lower() in limit_to_domains:
                 continue
 
-            if item['ValidationStatus'] == 'PENDING_VALIDATION':
+            if item['ValidationStatus'] == 'PENDING_VALIDATION' and item.get('ResourceRecord'):
                 if item['ResourceRecord']['Name'] in names:
                     continue
 
