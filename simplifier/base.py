@@ -4,16 +4,62 @@ from dataclasses import dataclass
 import boto3
 
 
-class Boto3Base:
+class Boto3SessionBase:
     _service = None
     _session = None
+
+    def __init__(self, *, session=None):
+        self.session = session
+
+    @property
+    def service(self):
+        return self._service
+
+    @property
+    def session_args(self):
+        return {}
+
+    @property
+    def session(self):
+        if not self._session:
+            self._session = boto3.session.Session(**self.session_args)
+
+        return self._session
+
+    @session.setter
+    def session(self, value):
+        self._session = value
+
+
+class Boto3Enum(Boto3SessionBase):
+    _instances = {}
+
+    def __new__(cls, service, *args, **kwargs):
+        if service not in cls._instance:
+            cls._instances[service] = super().__new__(cls, *args, **kwargs)
+            cls._instances[service]._service = service
+
+        return cls._instances[service]
+
+    def service_model(self):
+        return self.session.get_service_model(self.service)
+
+    def operation_model(self, name):
+        return self.service_model.operation_model(name)
+
+    def operation_enum(self, operation_model, member):
+        return self.operation_model(operation_model).input_shape.members(member).enum
+
+
+class Boto3Base(Boto3SessionBase):
     _client = None
     _resource = None
     _data = None
     tags = None
 
-    def __init__(self, *, session=None, client=None, tags=None):
-        self.session = session
+    def __init__(self, *, client=None, tags=None, **kwargs):
+        super().__init__(**kwargs)
+
         self.client = client
         self.tags = None
         self._data = {}
@@ -27,10 +73,6 @@ class Boto3Base:
         }
 
     @property
-    def session_args(self):
-        return {}
-
-    @property
     def client_args(self):
         return {}
 
@@ -39,20 +81,9 @@ class Boto3Base:
         return self.client_args
 
     @property
-    def session(self):
-        if not self._session:
-            self._session = boto3.session.Session(**self.session_args)
-
-        return self._session
-
-    @session.setter
-    def session(self, value):
-        self._session = value
-
-    @property
     def client(self):
         if not self._client:
-            self._client = self.session.client(self._service, **self.client_args)
+            self._client = self.session.client(self.service, **self.client_args)
 
         return self._client
 
@@ -63,7 +94,7 @@ class Boto3Base:
     @property
     def resource(self):
         if not self._resource:
-            self._resource = self.session.resource(self._service, **self.resource_args)
+            self._resource = self.session.resource(self.service, **self.resource_args)
 
         return self._resource
 
