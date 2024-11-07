@@ -54,6 +54,22 @@ class Gateway(ApiGatewayBase):
         usage_plan.ensure_stage(self)
         usage_plan.add_key(api_key)
 
+        for resource in self.paginate('get_resources', 'items', restApiId=self.id):
+            for method, data in resource.get('resourceMethods', {}).items():
+                if data.get('apiKeyRequired'):
+                    continue
+
+                self.client.update_method(
+                   restApiId=self.id,
+                   resourceId=resource['id'],
+                   httpMethod=method,
+                   patchOperations=[{
+                       'op': 'replace',
+                       'path': '/apiKeyRequired',
+                       'value': 'true',
+                   }],
+                )
+
     @property
     def stages(self):
         return [GatewayStage(deploymentId=item['deploymentId'], stageName=item['stageName']) for item in self.client.get_stages(restApiId=self.id).get('item')]
