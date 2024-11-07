@@ -7,6 +7,11 @@ import typing as t
 from ..base import Boto3Base
 
 
+class PolicyType(Enum):
+    MANAGED = 'managed'
+    CUSTOM = 'custom'
+
+
 class HTTPMethod(Enum):
     DELETE = 'DELETE'
     GET = 'GET'
@@ -17,7 +22,7 @@ class HTTPMethod(Enum):
     PUT = 'PUT'
 
     @property
-    def ALL(self):
+    def ALL(self) -> t.List['HTTPMethod']:
         return [
             self.DELETE,
             self.GET,
@@ -45,16 +50,12 @@ class ReferrerOption(Enum):
     UNSAFE_URL = 'unsafe-url'
 
 
-class Policy(Boto3Base):
-    _service = 'cloudfront'
-
-
 @dataclass(kw_only=True)
 class StringItemsArray:
     Items: t.List[str] = None
 
     @property
-    def quantity(self):
+    def quantity(self) -> int:
         return len(self.Items) if isinstance(self.Items, list) else 0
 
 
@@ -123,6 +124,31 @@ class SecurityHeadersConfig:
     XSSProtection: XssProtection = None
 
 
+class Policy(Boto3Base):
+    _service: str = 'cloudfront'
+
+    id: str = None
+    etag: str = None
+    type: PolicyType = None
+    policy: t.Dict[str, any] = None
+
+    def paginate(self, paginate_func, *result_keys, **kwargs):
+        marker = kwargs.get('Marker')
+        next_marker = None
+        results = paginate_func(**kwargs)
+
+        for key in result_keys:
+            next_marker = results.get('NextMarker')
+            results = results.get(key, [])
+
+        for item in results:
+            yield item
+
+        if next_marker and next_marker != marker:
+            print(f'pagination: {marker} -> {next_marker}')
+            yield self.paginate(paginate_func, *result_keys, Marker=next_marker, **kwargs)
+
+
 class OriginPolicy(Policy):
     pass
 
@@ -132,6 +158,7 @@ class RequestPolicy(Policy):
 
 
 class ResponsePolicy(Policy):
+
     def __init__(self, name, *,
         policy=None,
         cors=None,
@@ -141,8 +168,8 @@ class ResponsePolicy(Policy):
         referrer_policy=None,
         strict_transport_security=None,
     ):
-        self.name = name
         self.policy = policy or {}
+        self.name = name
         if cors is not None:
             self.cors = cors
         if content_type_options is not None:
@@ -155,6 +182,17 @@ class ResponsePolicy(Policy):
             self.referrer_policy = referrer_policy
         if strict_transport_security is not None:
             self.strict_transport_security = strict_transport_security
+
+    @property
+    def name(self):
+        return self.policy.get('Name', None)
+
+    @name.setter
+    def name(self, value):
+        if value is None:
+            raise ValueError('Policy requires a name')
+        else:
+            self.policy['Name'] = value
 
     @property
     def cors(self):
@@ -235,19 +273,48 @@ class ResponsePolicy(Policy):
     @classmethod
     def find_by_name(cls, name):
         self = cls(name)
+        for policy in self.paginate(self.client.list_response_headers_policies, 'ResponseHeadersPolicyList', 'Items'):
+            check = policy['ResponseHeadersPolicy']
+            if check.get('ResponseHeadersPolicyConfig', {}).get('Name') == name:
+                self.type = policy['Type']
+
+                self.id = check['Id']
+                self.policy = check['ResponseHeadersPolicyConfig']
+                return self
+
+        return None
+
+    @classmethod
+    def find_by_id(cls, id_):
+        self = cls(id_)
         try:
             policy = self.client.get_response_headers_policy(
-                Id=name,
+                Id=id_,
             )
-            self.policy = policy['ResponseHeadersPolicy']
+
+            self.type = policy['Type']
+
+            check = policy['ResponseHeadersPolicy']
+            self.etag = policy['ETag']
+            self.id = check['Id']
+            self.policy = check['ResponseHeadersPolicyConfig']
             return self
 
         except self.client.exceptions.NoSuchResponseHeadersPolicy:
             return None
 
     def create(self):
-        id_ = self.policy.pop('Id', self.name)
-        self.policy['Name'] = id_
+        self.policy['Name'] = self.name
         resp = self.client.create_response_headers_policy(
             ResponseHeadersPolicyConfig=self.policy,
         )
+        self.id = resp['ResponseHeadersPolicy']['Id']
+        self.etag = resp['ETag']
+
+    def update(self):
+        resp = self.client.create_response_headers_policy(
+            Id=self.id,
+            IfMatch=self.etag,
+            ResponseHeadersPolicyConfig=self.policy,
+        )
+        self.id = resp['ResponseHeadersPolicy']['Id']
